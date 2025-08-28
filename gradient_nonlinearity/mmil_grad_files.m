@@ -139,6 +139,11 @@ case 19, % Siemens Aera XJ
     fname_gradP = 'siemens_AeraXJ_dP.mgh';
     fname_gradH = 'siemens_AeraXJ_dH.mgh';
     grad_unwarp = 'Siemens_AeraXJ';
+case 20, % Siemens Aera XQ
+    fname_gradL = 'siemens_AeraXQ_dL.mgh';
+    fname_gradP = 'siemens_AeraXQ_dP.mgh';
+    fname_gradH = 'siemens_AeraXQ_dH.mgh';
+    grad_unwarp = 'Siemens_AeraXQ';
  otherwise,
     error('unsupported error type %d',gradient_type);
 end
