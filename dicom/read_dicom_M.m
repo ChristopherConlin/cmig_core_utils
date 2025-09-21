@@ -39,10 +39,21 @@ if ~enhanced_flag % Traditional DICOMs -----------------------------------------
      ipp_diff = NaN(nfiles, 3);
      ipp_diff_norm = NaN(nfiles, 1);
      for i = 1:nfiles
-       dcminfo = dicominfo(fnames{i});
-       ImagePositionPatient(i,:) = dcminfo.ImagePositionPatient';
-       ipp_diff(i,:) = (dcminfo.ImagePositionPatient - ImagePositionPatient_1)';
-       ipp_diff_norm(i) = norm(ipp_diff(i,:));
+         try
+             obj = images.internal.dicom.DICOMFile(fnames{i});
+             tmp = obj.getAttributeByName('ImagePositionPatient');
+             ImagePositionPatient(i,:) = tmp;
+             ipp_diff(i,:) = (tmp - ImagePositionPatient_1)';
+             ipp_diff_norm(i) = norm(ipp_diff(i,:));
+         catch
+             warning(['ImagePositionPatient tag not found for: ', fnames{i}]);
+         end
+
+       % Older solution using dicominfo
+       % dcminfo = dicominfo(fnames{i});
+       % ImagePositionPatient(i,:) = dcminfo.ImagePositionPatient';
+       % ipp_diff(i,:) = (dcminfo.ImagePositionPatient - ImagePositionPatient_1)';
+       % ipp_diff_norm(i) = norm(ipp_diff(i,:));
      end
 
      [unique_ipp, ia, ic] = unique(ImagePositionPatient, 'stable', 'rows');
