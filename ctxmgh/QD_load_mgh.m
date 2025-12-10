@@ -1,10 +1,8 @@
 function [vol, M, mr_parms, volsz] = QD_load_mgh(fname,slices,frames,headeronly,keepsingle)
-% [vol, M, mr_parms, volsz] = QD_load_mgh(fname,<slices>,<frames>,<headeronly>,<keepsingle>)
-%
-% QD_load_mgh.m - Read 0-based mgh or mgz file into matlab 1-based array
+% [vol, M, mr_parms, volsz] = fs_load_mgh(fname,[slices],[frames],[headeronly],[keepsingle])
 %
 % Required Input:
-%   fname: path of the 0-based .mgh or .mgz filename
+%   fname: path of the mgh file
 % 
 % Optional Input:
 %   slices: list of one-based slice numbers to load. All
@@ -23,17 +21,21 @@ function [vol, M, mr_parms, volsz] = QD_load_mgh(fname,slices,frames,headeronly,
 %     {default = 0}
 %
 % Output:
-%   vol: 3D, or 4D array of 1-based voxel intensities (if surface data, size will be [n,1,1,f])
-%   M:   4x4 vox2ras transform such that
-%        y(i1,i2,i3), xyz1 = M*[i1 i2 i3 1] where the
-%        indices are 1-based. 
-%        If the input has multiple frames,
-%        only the first frame is read.
+%   vol: 4D volume (if surface data, size will be [n,1,1,f])
+%   M: 4x4 vox2ras transform such that
+%     y(i1,i2,i3), xyz1 = M*[i1 i2 i3 1] where the
+%     indices are 1-based. 
+%     If the input has multiple frames,
+%     only the first frame is read.
 %   mr_parms: [tr flipangle te ti fov]
 %   volsz: size(vol). Helpful when using headeronly as vol is [].
 %
-% early mod:  12/13/10 by C Roddey
-% last mod:   1/7/2011 by N White
+% See also: fs_save_mgh
+%
+% copied from freesurfer: 01/18/06
+% Prev Mod:               05/02/12 by Don Hagler
+% Last Mod:               03/12/18 by Feng Xue
+%
 
 vol = [];
 M = [];
@@ -54,68 +56,20 @@ end;
 % unzip if it is compressed 
 if ((length(fname) >=4 && strcmpi(fname((length(fname)-3):length(fname)), '.MGZ')) | ...
 		(length(fname) >=3 && strcmpi(fname((length(fname)-2):length(fname)), '.GZ')))
-    if verLessThan('matlab', '7.1.1')
-        [in_path,in_stem,in_ext,in_ver] = fileparts(fname);
-    else
-        [in_path,in_stem,in_ext] = fileparts(fname); % R2010b and later removed fourth output argument
-    end
-    if isempty(in_path)
-    tmpdir = '.';
-  else
-    tmpdir = in_path;
-  end;
-  if verLessThan('matlab', '7.1.1')
-      [tmp_path,tmp_stem,tmp_ext,tmp_ver] = fileparts(tempname);
-  else  
-      [tmp_path,tmp_stem,tmp_ext] = fileparts(tempname); % R2010b and later removed fourth output argument
-  end
-
-  % test if we can write to input directory
-  tmpfile = [tmpdir '/.' tmp_stem]; 
-  cmd = sprintf('touch %s',tmpfile);
-  [status,result] = unix(cmd);
-  tmpdir_inputdir_flag = 0;
-  if ~status % can write to this directory
-    if exist(tmpfile,'file'), delete(tmpfile); end;
-    tmpdir_inputdir_flag = 1;
-  elseif exist('/scratch','dir')
-    tmpdir = '/scratch';
-  else
-    tmpdir = '/tmp';
-  end;
-  if ~exist(tmpdir,'dir')
-    error('tmpdir %s not found',tmpdir);
-  end;
-
-  if isempty(in_path) || tmpdir_inputdir_flag
-    tmp_stem = '';
-  else
-    tmp_stem = regexprep(char(in_path),'/','_');
-    if tmp_stem(1) == '_'
-      if length(tmp_stem)>=2
-        tmp_stem = tmp_stem(2:end);
-      else
-        tmp_stem = '';
-      end;
-    end;
-  end;
-  if length(tmp_stem) > max_tmp_strlen
-    tmp_stem = tmp_stem(end-max_tmp_strlen+1:end);
-  end;
-  % rand('twister',sum(100*clock));
-  rng('default')
-  tmp_stem = [tmp_stem '_' num2str(round(rand(1)*10000000))];
-	temp_fname = sprintf('%s/%s_%s.mgh',tmpdir,in_stem,tmp_stem);
-
-        % fix to deal with zcat conversion on mac. -nwhite 3/2014
-        if strcmpi(computer,'MACI64')
-            unix(sprintf('gzcat %s > %s', fname, temp_fname)) ;
-        else
-            unix(sprintf('zcat %s > %s', fname, temp_fname)) ;
+        tempfname = mmil_tempfname;
+        new_fname = sprintf('%s.mgh', tempfname);
+        cmd = sprintf('zcat < %s > %s', fname, new_fname);
+	[s o e] = jsystem(cmd) ; % AMD: hack make make work more reliably on macOS
+%        fprintf(1,'file %s written\n',new_fname);
+        if s || ~exist(new_fname,'file')
+          disp(cmd)
+          disp(s)
+          disp(o)
+          disp(e)
+          keyboard
         end
-
-	fname = temp_fname ;
-
+%	fname = temp_fname ;
+	fname = new_fname;
 	zipflag = 1;
 else
 	zipflag = 0;
@@ -129,10 +83,8 @@ if(exist('frames')~=1) frames = []; end
 if(isempty(frames)) frames = 0; end
 if(frames(1) <= 0) frames = 0; end
 
-if(exist('headeronly')~=1) headeronly = 0; end
-
-if(exist('keepsingle')~=1) keepsingle = 0; end
-
+if ~exist('headeronly','var') || isempty(headeronly), headeronly = 0; end
+if ~exist('keepsingle','var') || isempty(keepsingle), keepsingle = 0; end
 
 fid    = fopen(fname, 'rb', 'b') ;
 if(fid == -1)
@@ -149,6 +101,7 @@ dof     = fread(fid, 1, 'int') ;
 if(slices(1) > 0)
   ind = find(slices > ndim3);
   if(~isempty(ind))
+    if zipflag, delete(fname); end
     error('some slices exceed nslices');
   end
 end
@@ -156,6 +109,7 @@ end
 if(frames(1) > 0)
   ind = find(frames > nframes);
   if(~isempty(ind))
+    if zipflag, delete(fname); end
     error('some frames exceed nframes');
   end
 end
@@ -211,6 +165,7 @@ try
     nbytespervox = 4;
   end
 catch
+  if zipflag, delete(fname); end
   error('header of %s has bad type info',fname);
 end;
 
@@ -224,15 +179,14 @@ if(headeronly)
   end
   fclose(fid);
   if zipflag
-%    keyboard
-    unix(sprintf('rm -rf %s', fname));
+    delete(fname);
   end
   return;
 end
 
 %------------------ Read in the entire volume ----------------%
 if(slices(1) <= 0 & frames(1) <= 0)
-  switch type
+  switch type % What aboyt type = 2??
    case MRI_FLOAT,
     if keepsingle
       vol = fread(fid, nv, 'float32=>float32');
@@ -245,6 +199,8 @@ if(slices(1) <= 0 & frames(1) <= 0)
     vol = fread(fid, nv, 'short');
    case MRI_INT,
     vol = fread(fid, nv, 'int');
+   case MRI_LONG,
+    vol = fread(fid, nv, 'int16'); % hack to work with lq/lqseg.mgz, which is saved with type MRI_LONG, but is actually int16
   end
   if(~feof(fid))
     [mr_parms count] = fread(fid,4,'float32');
@@ -253,9 +209,13 @@ if(slices(1) <= 0 & frames(1) <= 0)
     end
   end
   fclose(fid) ;
+
+  if isempty(vol)
+    keyboard
+  end
+
   if zipflag
-%    keyboard
-    unix(sprintf('rm -rf %s', fname));
+    delete(fname);
   end
   
   nread = prod(size(vol));
@@ -307,8 +267,7 @@ for frame = frames
     if(nread ~= nvslice)
       fclose(fid);
       if zipflag
-%        keyboard
-        unix(sprintf('rm -rf %s', fname));
+        delete(fname);
       end
       error('reading slice %d, frame %d, tried to read %d, actually read %d',...
         slice,frame,nvslice,nread);
@@ -333,9 +292,6 @@ if(~feof(fid))
 end
 
 fclose(fid) ;
-if zipflag
-%  keyboard
-  unix(sprintf('rm -rf %s', fname));
-end
+if zipflag, delete(fname); end
 
 return;
