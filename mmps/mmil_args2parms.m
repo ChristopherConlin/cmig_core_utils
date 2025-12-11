@@ -1,5 +1,5 @@
-function parms   = mmil_args2parms(options, options_schema, strict)
-%parms   = mmil_args2parms(options, options_schema, [strict])
+function parms = mmil_args2parms(options, options_schema, strict)
+%function parms = mmil_args2parms(options, options_schema, [strict])
 %
 % Purpose:
 %   Take a set of argument-value pairs and a set of argument-value
@@ -29,16 +29,17 @@ function parms   = mmil_args2parms(options, options_schema, strict)
 % See also: mmil_parms2args
 %
 % Created:  07/15/07 by Ben Cipollini 
-% Last Mod: 02/19/11 by Don Hagler
+% Prev Mod: 10/09/13 by Don Hagler
+% Last Mod: 06/01/17 by Don Hagler
 %
 
 if ~mmil_check_nargs(nargin,2), return; end;
 
 if (0 ~= mod(length(options),2))     %   Validate that the # of args is even
-  error('List of arguments must be even (must have name/value pair)');
+  error('list of arguments must be even (must have name/value pair)');
 end;
 if (0 ~= mod(length(options_schema),3))    %   Validate the options_schema info is right
-  error('Programming error: list of default arguments must be even (must have name/value pair)');
+  error('programming error: list of default arguments must be divisible by three (must have name/default/allowed triplets)');
 end;
 if (~exist('strict', 'var'))
   strict = true;
@@ -54,11 +55,15 @@ end;
 
 valid_fields    = options_schema(1:3:end);
 input_fields    = options(1:2:end);
-unknown_fields  = setdiff(input_fields, valid_fields);
+if ~isempty(valid_fields)
+  unknown_fields  = setdiff(input_fields, valid_fields);
+else
+  unknown_fields = [];
+end;
 
 %   Validate that there are no extraneous params sent in
 if (strict && ~isempty(unknown_fields))
-  error('The following unrecogized options were passed in: %s', sprintf('%s ',unknown_fields{:}));
+  error('the following unrecogized options were passed in: %s', sprintf('%s ',unknown_fields{:}));
 end;
 
 if (~isempty( options ))
