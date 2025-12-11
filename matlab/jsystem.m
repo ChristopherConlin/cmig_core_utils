@@ -54,8 +54,8 @@ pb = java.lang.ProcessBuilder({''});
 % Set it's working directory to the current matlab dir
 pb.directory(java.io.File(dir));
 
-% Enable stderror redirection to stdout
-pb.redirectErrorStream(true);
+% Disable stderror redirection to stdout
+pb.redirectErrorStream(false);
 
 % If the user doesn't wan't to use a shell, split the command from it's
 % arguments. Otherwise, prefix the shell invocation.
